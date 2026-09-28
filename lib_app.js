@@ -216,9 +216,54 @@ const app = {
                     </select>
                 </div>
                 <input type="text" value="${this.escapeHtml(block.text)}" oninput="app.updateDialogueText(${block.id}, this.value)" placeholder="Fala deste personagem..." class="flex-1 bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white outline-none w-full">
-                <button type="button" onclick="app.removeDialogueBlock(${block.id})" class="text-gray-400 hover:text-red-400 p-1 rounded transition-colors text-sm" title="Remover fala">✕</button>
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <button type="button" onclick="app.previewDialogueLine(${block.id})" class="glass-btn p-1.5 rounded-xl text-sky-400 hover:text-white text-xs" title="Ouvir teste desta fala">▶</button>
+                    <button type="button" onclick="app.removeDialogueBlock(${block.id})" class="text-gray-400 hover:text-red-400 p-1.5 rounded transition-colors text-sm" title="Remover fala">✕</button>
+                </div>
             </div>
         `).join('');
+    },
+
+    async previewDialogueLine(id) {
+        if (!this.requireLogin()) return;
+        const b = window.appState.dialogueBlocks.find(x => x.id === id);
+        if (!b || !b.text.trim()) {
+            this.toast('Digite o texto desta fala primeiro para ouvir o teste.', 'info');
+            return;
+        }
+
+        const btn = event?.currentTarget;
+        if (btn) btn.innerHTML = `<span class="spinner w-3 h-3 border-2" style="border-width: 1px;"></span>`;
+
+        try {
+            const resp = await fetch('api_tts.php', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${window.appState.token}`
+                },
+                body: JSON.stringify({
+                    text: b.text.trim(),
+                    voice: b.voice,
+                    speed: parseFloat(document.getElementById('speedSlider')?.value || 1.0),
+                    model: 'tts-1',
+                    format: 'mp3',
+                    preview: true
+                })
+            });
+
+            const data = await resp.json();
+            if (data.success && data.audio_url) {
+                const a = new Audio(data.audio_url);
+                a.play();
+            } else {
+                this.toast(data.error || 'Erro no preview', 'error');
+            }
+        } catch (e) {
+            this.toast('Falha ao gerar teste de voz', 'error');
+        } finally {
+            if (btn) btn.innerHTML = '▶';
+        }
     },
 
     addDialogueBlock() {
@@ -667,16 +712,12 @@ const app = {
 
         try {
             // Em modo diálogo, compila o texto indicando o locutor ou gera o primeiro bloco
-            // Para garantir a melhor experiência, envia o texto estruturado do roteiro
-            const scriptText = blocks.map((b, i) => `${b.voice.toUpperCase()}: ${b.text}`).join('\n\n');
-            const mainVoice = blocks[0].voice || 'onyx';
-
             const params = {
-                text: scriptText,
-                voice: mainVoice,
-                speed: parseFloat(document.getElementById('speedSlider').value),
-                model: document.getElementById('modelSelect').value,
-                format: document.getElementById('formatSelect').value
+                mode: 'dialogue',
+                blocks: blocks.map(b => ({ voice: b.voice, text: b.text.trim() })),
+                speed: parseFloat(document.getElementById('speedSlider')?.value || 1.0),
+                model: document.getElementById('modelSelect')?.value || 'tts-1',
+                format: document.getElementById('formatSelect')?.value || 'mp3'
             };
 
             const response = await fetch('api_tts.php', {
