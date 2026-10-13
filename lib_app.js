@@ -83,7 +83,7 @@ const app = {
                                 headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
                             });
                             const googleUser = await res.json();
-                            await this.handleGoogleLoginSuccess(googleUser);
+                            await this.handleGoogleLoginSuccess(googleUser, tokenResponse.access_token);
                         } catch (err) {
                             console.error('Erro ao obter perfil Google:', err);
                             this.toast('Falha ao obter dados da conta Google', 'error');
@@ -107,12 +107,13 @@ const app = {
         }
     },
 
-    async handleGoogleLoginSuccess(googleUser) {
+    async handleGoogleLoginSuccess(googleUser, accessToken) {
         try {
             const resp = await fetch('../keepai/api/auth.php?action=google', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    access_token: accessToken,
                     email: googleUser.email,
                     name: googleUser.name,
                     picture: googleUser.picture
